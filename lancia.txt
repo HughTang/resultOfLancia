@@ -1,0 +1,530 @@
+DMName在lancia项目中的函数名一致性检查及推荐结果
+lancia地址：https://github.com/aoju/lancia
+
+
+--------------------
+// Path: lancia/src/main/java/org/aoju/lancia/Browser.java
+// Line Number: 170
+// Inconsistent Method: create
+// DMName Predicted: {create Browser}
+// Original Method Code:
+    public static Browser create(Connection connection, List<String> contextIds, boolean ignoreHTTPSErrors, Viewport viewport, Process process, Function<Object, Object> closeCallback) {
+        Browser browser = new Browser(connection, contextIds, ignoreHTTPSErrors, viewport, process, closeCallback);
+        Map<String, Object> params = new HashMap<>();
+        params.put("discover", true);
+        connection.send("Target.setDiscoverTargets", params, false);
+        return browser;
+    }
+
+	
+--------------------
+// Path: lancia/src/main/java/org/aoju/lancia/Browser.java
+// Line Number: 237
+// Inconsistent Method: targetCreated
+// DMName Predicted: {create Target By Event}
+// Original Method Code:
+	protected void targetCreated(TargetCreatedPayload event) {
+        Context context;
+        TargetInfo targetInfo = event.getTargetInfo();
+        if (StringKit.isNotEmpty(targetInfo.getBrowserContextId()) && this.contexts().containsKey(targetInfo.getBrowserContextId())) {
+            context = this.contexts().get(targetInfo.getBrowserContextId());
+        } else {
+            context = this.defaultBrowserContext();
+        }
+        Target target = new Target(targetInfo, context, () -> this.getConnection().createSession(targetInfo), this.getIgnoreHTTPSErrors(), this.getViewport(), this.screenshotTaskQueue);
+        if (this.targets.get(targetInfo.getTargetId()) != null) {
+            throw new RuntimeException("Target should not exist befor targetCreated");
+        }
+        this.targets.put(targetInfo.getTargetId(), target);
+        if (target.waitInitializedPromise()) {
+            this.emit(Builder.Event.BROWSER_TARGETCREATED.getName(), target);
+            context.emit(Builder.Event.BROWSERCONTEXT_TARGETCREATED.getName(), target);
+        }
+    }
+
+--------------------
+// Path: lancia/src/main/java/org/aoju/lancia/Browser.java
+// Line Number: 263
+// Inconsistent Method: waitForTarget
+// DMName Predicted: {initial Target}
+// Original Method Code:
+	public Target waitForTarget(Predicate<Target> predicate, ChromeOption options) {
+        int timeout = options.getTimeout();
+        long base = System.currentTimeMillis();
+        long now = 0;
+        while (true) {
+            long delay = timeout - now;
+            if (delay <= 0) {
+                break;
+            }
+            Target existingTarget = find(targets(), predicate);
+            if (null != existingTarget) {
+                return existingTarget;
+            }
+            now = System.currentTimeMillis() - base;
+        }
+        throw new InternalException("Waiting for target failed: timeout " + options.getTimeout() + "ms exceeded");
+    }
+
+--------------------
+// Path: lancia/src/main/java/org/aoju/lancia/Browser.java
+// Line Number: 284
+// Inconsistent Method:  
+// DMName Predicted: {get Target}
+// Original Method Code:
+    public Target target() {
+        for (Target target : this.targets()) {
+            if ("browser".equals(target.type())) {
+                return target;
+            }
+        }
+        return null;
+    }
+
+--------------------
+// Path: lancia/src/main/java/org/aoju/lancia/Browser.java
+// Line Number: 336
+// Inconsistent Method: find
+// DMName Predicted: {find Target By Predicate}
+// Original Method Code:
+    private Target find(List<Target> targets, Predicate<Target> predicate) {
+        if (CollKit.isNotEmpty(targets)) {
+            for (Target target : targets) {
+                if (predicate.test(target)) {
+                    return target;
+                }
+            }
+        }
+        return null;
+    }
+
+--------------------
+// Path: lancia/src/main/java/org/aoju/lancia/Builder.java
+// Line Number: 363
+// Inconsistent Method: printPDF
+// DMName Predicted: {file IO Stream Handle}
+// Original Method Code:
+    private static byte[] printPDF(CDPSession client, String handler, String path) throws IOException {
+        boolean eof = false;
+        File file = null;
+        BufferedOutputStream writer = null;
+        BufferedInputStream reader = null;
+
+        if (StringKit.isNotEmpty(path)) {
+            file = new File(path);
+            createNewFile(file);
+        }
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("handle", handler);
+        try {
+
+            if (file != null) {
+                FileOutputStream fileOutputStream = new FileOutputStream(file);
+                writer = new BufferedOutputStream(fileOutputStream);
+            }
+            byte[] buffer = new byte[DEFAULT_BUFFER_SIZE];
+            byte[] bytes;
+            List<byte[]> bufs = new ArrayList<>();
+            int byteLength = 0;
+
+            while (!eof) {
+                JSONObject response = client.send("IO.read", params, true);
+                String eofNode = response.getString(RECV_MESSAGE_STREAM_EOF_PROPERTY);
+                Boolean base64EncodedNode = response.getBoolean(RECV_MESSAGE_BASE64ENCODED_PROPERTY);
+                String dataText = response.getString(RECV_MESSAGE_STREAM_DATA_PROPERTY);
+
+                if (StringKit.isNotEmpty(dataText)) {
+                    try {
+                        if (base64EncodedNode != null && base64EncodedNode) {
+                            bytes = Base64.getDecoder().decode(dataText);
+                        } else {
+                            bytes = dataText.getBytes();
+                        }
+                        bufs.add(bytes);
+                        byteLength += bytes.length;
+                        
+                        if (file != null) {
+                            ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(bytes);
+                            reader = new BufferedInputStream(byteArrayInputStream);
+                            int read;
+                            while ((read = reader.read(buffer, 0, DEFAULT_BUFFER_SIZE)) != -1) {
+                                writer.write(buffer, 0, read);
+                                writer.flush();
+                            }
+                        }
+                    } finally {
+                        IoKit.close(reader);
+                    }
+                }
+                eof = eofNode == null || Boolean.parseBoolean(eofNode);
+            }
+            client.send("IO.close", params, true);
+            return getBytes(bufs, byteLength);
+        } finally {
+            IoKit.close(writer);
+            IoKit.close(reader);
+        }
+    }
+
+--------------------
+// Path: lancia/src/main/java/org/aoju/lancia/Builder.java
+// Line Number: 551
+// Inconsistent Method: evaluationString
+// DMName Predicted: {evalute Json String}
+// Original Method Code:
+    public static final String evaluationString(String fun, PageEvaluateType type, Object... args) {
+        if (PageEvaluateType.STRING.equals(type)) {
+            Assert.isTrue(args.length == 0, "Cannot evaluate a string with arguments");
+            return fun;
+        }
+        List<String> argsList = new ArrayList<>();
+        for (Object arg : args) {
+            if (arg == null) {
+                argsList.add("Undefined");
+            } else {
+                argsList.add(JSON.toJSONString(arg));
+            }
+        }
+        return MessageFormat.format("({0})({1})", fun, String.join(",", argsList));
+    }
+
+--------------------
+// Path: lancia/src/main/java/org/aoju/lancia/Builder.java
+// Line Number: 674
+// Inconsistent Method: download
+// DMName Predicted: {download File}
+// Original Method Code:
+    public static void download(String url, String filePath, BiConsumer<Integer, Integer> progressCallback) throws IOException, ExecutionException, InterruptedException {
+        long contentLength = getContentLength(url);
+
+        long taskCount = contentLength % CHUNK_SIZE == 0 ? contentLength / CHUNK_SIZE : contentLength / CHUNK_SIZE + 1;
+        createFile(filePath, contentLength);
+
+        ThreadPoolExecutor executor = new ThreadPoolExecutor(5, 5, 30000, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+        CompletionService<String> completionService = new ExecutorCompletionService<>(executor);
+        List<Future<String>> futureList = new ArrayList<>();
+        int downloadCount = 0;
+        if (contentLength <= CHUNK_SIZE) {
+            Future<String> future = completionService.submit(new DownloadCallable(0, contentLength, filePath, url));
+            futureList.add(future);
+        } else {
+            for (int i = 0; i < taskCount; i++) {
+                if (i == taskCount - 1) {
+                    Future<String> future = completionService.submit(new DownloadCallable(i * CHUNK_SIZE, contentLength, filePath, url));
+                    futureList.add(future);
+                } else {
+                    Future<String> future = completionService.submit(new DownloadCallable(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE, filePath, url));
+                    futureList.add(future);
+                }
+            }
+        }
+        executor.shutdown();
+        for (Future<String> future : futureList) {
+            String result = future.get();
+            if (FAIL_RESULT.equals(result)) {
+                Logger.error("download fail,url:" + url);
+                Files.delete(Paths.get(filePath));
+                executor.shutdownNow();
+            } else {
+                try {
+                    downloadCount += Integer.parseInt(result);
+                    if (progressCallback != null) {
+                        progressCallback.accept(downloadCount, (int) (contentLength >> 20));
+                    }
+                } catch (Exception e) {
+                    Logger.error("ProgressCallback has some problem", e);
+                }
+            }
+        }
+    }
+
+--------------------
+// Path: lancia/src/main/java/org/aoju/lancia/kernel/browser/Fetcher.java
+// Line Number: 628
+// Inconsistent Method: revisionInfo
+// DMName Predicted: {get Reversion Info}
+// Original Method Code:
+    public Revision revisionInfo(String revision) {
+        String folderPath = this.getFolderPath(revision);
+        String executablePath;
+        if ("chrome".equals(this.product)) {
+            if ("mac".equals(this.platform)) {
+                executablePath = Builder.join(folderPath, archiveName(this.product, this.platform, revision), "Chromium.app", "Contents", "MacOS", "Chromium");
+            } else if ("linux".equals(this.platform)) {
+                executablePath = Builder.join(folderPath, archiveName(this.product, this.platform, revision), "chrome");
+            } else if ("win32".equals(this.platform) || "win64".equals(this.platform)) {
+                executablePath = Builder.join(folderPath, archiveName(this.product, this.platform, revision), "chrome.exe");
+            } else {
+                throw new IllegalArgumentException("Unsupported platform: " + this.platform);
+            }
+        } else if ("firefox".equals(this.product)) {
+            if ("mac".equals(this.platform))
+                executablePath = Builder.join(folderPath, "Firefox Nightly.app", "Contents", "MacOS", "firefox");
+            else if ("linux".equals(this.platform))
+                executablePath = Builder.join(folderPath, "firefox", "firefox");
+            else if ("win32".equals(this.platform) || "win64".equals(this.platform))
+                executablePath = Builder.join(folderPath, "firefox", "firefox.exe");
+            else
+                throw new IllegalArgumentException("Unsupported platform: " + this.platform);
+        } else {
+            throw new IllegalArgumentException("Unsupported product: " + this.product);
+        }
+        String url = downloadURL(this.product, this.platform, this.downloadHost, revision);
+        boolean local = this.existsAsync(folderPath);
+        Logger.info("Version:{}，executablePath:{}，folderPath:{}，local:{}，url:{}，product:{}", revision, executablePath, folderPath, local, url, this.product);
+        return new Revision(revision, executablePath, folderPath, local, url, this.product);
+    }
+
+--------------------
+// Path: lancia/src/main/java/org/aoju/lancia/kernel/browser/Fetcher.java
+// Line Number: 677
+// Inconsistent Method: archiveName
+// DMName Predicted: {parse Archive Name}
+// Original Method Code:
+    public String archiveName(String product, String platform, String revision) {
+        if ("chrome".equals(product)) {
+            if ("linux".equals(platform))
+                return "chrome-linux";
+            if ("mac".equals(platform))
+                return "chrome-mac";
+            if ("win32".equals(platform) || "win64".equals(platform)) {
+                return Integer.parseInt(revision) > 591479 ? "chrome-win" : "chrome-win32";
+            }
+        } else if ("firefox".equals(product)) {
+            if ("linux".equals(platform))
+                return "firefox-linux";
+            if ("mac".equals(platform))
+                return "firefox-mac";
+            if ("win32".equals(platform) || "win64".equals(platform))
+                return "firefox-" + platform;
+        }
+        return null;
+    }
+
+--------------------
+// Path: lancia/src/main/java/org/aoju/lancia/worker/SocketTransport.java
+// Line Number: 190
+// Inconsistent Method: createBinary
+// DMName Predicted: {create Buffer Block}
+// Original Method Code:
+    public ByteBuffer createBinary(ByteBuffer byteBuffer) {
+        if (Logger.get().isTrace())
+            Logger.trace("afterEnconding({}): {}", byteBuffer.remaining(), (byteBuffer.remaining() > 1000 ? "too big to display" : new String(byteBuffer.array())));
+        boolean mask = true;
+        int sizebytes = getSizeByte(byteBuffer);
+        ByteBuffer buf = ByteBuffer.allocate(1 + (sizebytes > 1 ? sizebytes + 1 : sizebytes) + (mask ? 4 : 0) + byteBuffer.remaining());
+        byte optcode = 1;
+        byte one = -128;
+        one |= optcode;
+        buf.put(one);
+        byte[] payloadlengthbytes = toByteArray(byteBuffer.remaining(), sizebytes);
+        assert (payloadlengthbytes.length == sizebytes);
+
+        if (sizebytes == 1) {
+            buf.put((byte) (payloadlengthbytes[0] | getMaskByte(mask)));
+        } else if (sizebytes == 2) {
+            buf.put((byte) ((byte) 126 | getMaskByte(mask)));
+            buf.put(payloadlengthbytes);
+        } else if (sizebytes == 8) {
+            buf.put((byte) ((byte) 127 | getMaskByte(mask)));
+            buf.put(payloadlengthbytes);
+        } else {
+            throw new IllegalStateException("Size representation not supported/specified");
+        }
+        if (mask) {
+            ByteBuffer maskkey = ByteBuffer.allocate(4);
+            buf.put(maskkey.array());
+            for (int i = 0; byteBuffer.hasRemaining(); i++) {
+                buf.put((byte) (byteBuffer.get() ^ maskkey.get(i % 4)));
+            }
+        } else {
+            buf.put(byteBuffer);
+            byteBuffer.flip();
+        }
+        assert (buf.remaining() == 0) : buf.remaining();
+        buf.flip();
+        return buf;
+    }
+
+--------------------
+// Path: lancia/src/main/java/org/aoju/lancia/worker/SocketTransport.java
+// Line Number: 229
+// Inconsistent Method: translate
+// DMName Predicted: {translate Buffer}
+// Original Method Code:
+    public List<ByteString> translate(ByteBuffer buffer) {
+        while (true) {
+            List<ByteString> frames = new LinkedList<>();
+            ByteString cur;
+            if (byteBuffer != null) {
+                buffer.mark();
+                // 接收的字节数
+                int availableNextByteCount = buffer.remaining();
+                // 完成不完整帧的字节数
+                int expectedNextByteCount = byteBuffer.remaining();
+
+                if (expectedNextByteCount > availableNextByteCount) {
+                    // 没有接收到足够的字节来完成帧
+                    byteBuffer.put(buffer.array(), buffer.position(), availableNextByteCount);
+                    buffer.position(buffer.position() + availableNextByteCount);
+                    return Collections.emptyList();
+                }
+                byteBuffer.put(buffer.array(), buffer.position(), expectedNextByteCount);
+                buffer.position(buffer.position() + expectedNextByteCount);
+                cur = translateSingle((ByteBuffer) byteBuffer.duplicate().position(0));
+                frames.add(cur);
+                byteBuffer = null;
+            }
+
+            while (buffer.hasRemaining()) {
+                // 尽可能多读整帧
+                buffer.mark();
+                try {
+                    cur = translateSingle(buffer);
+                    frames.add(cur);
+                } catch (InternalException e) {
+                    buffer.reset();
+                    byteBuffer = ByteBuffer.allocate(this.realPacketSize);
+                    byteBuffer.put(buffer);
+                    break;
+                }
+            }
+            return frames;
+        }
+    }
+
+--------------------
+// Path: lancia/src/main/java/org/aoju/lancia/worker/SocketTransport.java
+// Line Number: 279
+// Inconsistent Method: translatePayload
+// DMName Predicted: {translate Buffer By Payload}
+// Original Method Code:
+    private void translatePayload(int[] array, ByteBuffer buffer, int payloadLength, int realLacketSize) throws InternalException {
+        if (payloadLength == 126) {
+            realLacketSize += 2; // 额外的长度字节
+            byte[] sizebytes = new byte[3];
+            sizebytes[1] = buffer.get( /*1 + 1*/);
+            sizebytes[2] = buffer.get( /*1 + 2*/);
+            payloadLength = new BigInteger(sizebytes).intValue();
+        } else {
+            realLacketSize += 8; // 额外的长度字节
+            byte[] bytes = new byte[8];
+            for (int i = 0; i < 8; i++) {
+                bytes[i] = buffer.get( /*1 + i*/);
+            }
+            long length = new BigInteger(bytes).longValue();
+            payloadLength = (int) length;
+        }
+
+        array[0] = payloadLength;
+        array[1] = realLacketSize;
+    }
+
+--------------------
+// Path: lancia/src/main/java/org/aoju/lancia/worker/SocketTransport.java
+// Line Number: 300
+// Inconsistent Method: translateSingle
+// DMName Predicted: {translate Single Buffer}
+// Original Method Code:
+    private ByteString translateSingle(ByteBuffer buffer) {
+        if (buffer == null)
+            throw new IllegalArgumentException();
+        int maxPacketsize = buffer.remaining();
+        this.realPacketSize = 2;
+
+        buffer.get( /*0*/);
+
+        byte b2 = buffer.get( /*1*/);
+        boolean mask = (b2 & -128) != 0;
+        int payloadLength = (byte) (b2 & ~(byte) 128);
+
+        if (!(payloadLength >= 0 && payloadLength <= 125)) {
+            int[] array = {payloadLength, realPacketSize};
+            translatePayload(array, buffer, payloadLength, realPacketSize);
+            payloadLength = array[0];
+            realPacketSize = array[1];
+        }
+        realPacketSize += (mask ? 4 : 0);
+        realPacketSize += payloadLength;
+
+        if (maxPacketsize < realPacketSize) {
+            Logger.trace("Incomplete frame: maxPacketsize < realPacketSize");
+            throw new InternalException("" + realPacketSize);
+        }
+        ByteBuffer payload = ByteBuffer.allocate(payloadLength);
+        if (mask) {
+            byte[] maskskey = new byte[4];
+            buffer.get(maskskey);
+            for (int i = 0; i < payloadLength; i++) {
+                payload.put((byte) (buffer.get( /*payloadstart + i*/) ^ maskskey[i % 4]));
+            }
+        } else {
+            payload.put(buffer.array(), buffer.position(), payload.limit());
+            buffer.position(buffer.position() + payload.limit());
+        }
+        payload.flip();
+        return ByteString.of(payload);
+    }
+
+
+--------------------
+// Path: lancia/src/main/java/org/aoju/lancia/worker/SocketTransport.java
+// Line Number: 882
+// Inconsistent Method: reset
+// DMName Predicted: {reset Connection}
+// Original Method Code:
+    private void reset() {
+        java.lang.Thread current = java.lang.Thread.currentThread();
+        if (current == writeThread || current == connectReadThread) {
+            throw new IllegalStateException("You cannot initialize a reconnect out of the websocket thread. Use reconnect in another thread to insure a successful cleanup.");
+        }
+        try {
+            close(NORMAL);
+            closeLatch.await();
+            if (writeThread != null) {
+                this.writeThread.interrupt();
+                this.writeThread = null;
+            }
+            if (connectReadThread != null) {
+                this.connectReadThread.interrupt();
+                this.connectReadThread = null;
+            }
+            this.protocol.byteBuffer = null;
+            if (this.socket != null) {
+                this.socket.close();
+                this.socket = null;
+            }
+        } catch (Exception e) {
+            this.closeConnection(ABNORMAL_CLOSE, e.getMessage(), false);
+            return;
+        }
+        connectLatch = new CountDownLatch(1);
+        closeLatch = new CountDownLatch(1);
+    }
+
+--------------------
+// Path: lancia/src/main/java/org/aoju/lancia/worker/SocketTransport.java
+// Line Number: 993
+// Inconsistent Method: runWrite
+// DMName Predicted: {write To Outstream}
+// Original Method Code:
+    private void runWrite() {
+        try {
+            while (!java.lang.Thread.interrupted()) {
+                ByteBuffer buffer = rfc.outQueue.take();
+                rfc.ostream.write(buffer.array(), 0, buffer.limit());
+                rfc.ostream.flush();
+            }
+        } catch (InterruptedException | IOException e) {
+            for (ByteBuffer buffer : rfc.outQueue) {
+                try {
+                    rfc.ostream.write(buffer.array(), 0, buffer.limit());
+                    rfc.ostream.flush();
+                } catch (IOException ioException) {
+                    ioException.printStackTrace();
+                }
+            }
+            java.lang.Thread.currentThread().interrupt();
+        }
+    }
